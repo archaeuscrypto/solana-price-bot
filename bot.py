@@ -67,7 +67,7 @@ async def update_price_nickname():
                 continue
             await member.edit(nick=formatted_price)
             logging.info("Nickname updated.")
-            role_name = "PriceBotColor"  # Name of the role you want to recolor
+            role_name = "PriceBotSolColor"  # Name of the role you want to recolor
 
             role = discord.utils.get(guild.roles, name=role_name)
             if role:
