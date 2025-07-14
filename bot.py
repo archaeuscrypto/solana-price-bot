@@ -3,13 +3,13 @@ import requests
 import asyncio
 import logging
 import os
+import json
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY")
-GUILD_ID = int(os.getenv("GUILD_ID") or '1392171241586298880')
+GUILD_IDS = json.loads(os.getenv("GUILD_IDS_JSON", "[]"))
 TOKEN_ADDRESS = 'So11111111111111111111111111111111111111112'
 UPDATE_INTERVAL = 60  # seconds
-
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -30,12 +30,9 @@ async def update_price_nickname():
             }
 
             response = requests.get(url, headers=headers)
-
-            # 🔍 Log the status code and response body
             logging.info(f"Birdeye response: {response.status_code} - {response.text}")
 
             data = response.json()
-
             price = data.get('data', {}).get('value')
             if price is None:
                 logging.error(f"Price not found in API response: {data}")
@@ -43,9 +40,8 @@ async def update_price_nickname():
                 continue
 
             formatted_price = f"${price:.6f}"
-
-            # Get 24h change from the same API response
             change_24h = data.get('data', {}).get('priceChange24h')
+
             if change_24h is not None:
                 change_str = f"{change_24h:+.2f}%"
                 arrow = "📈" if change_24h > 0 else "📉"
@@ -55,30 +51,28 @@ async def update_price_nickname():
             else:
                 logging.warning("24h change not found in API response.")
 
-            guild = discord.utils.get(client.guilds, id=GUILD_ID)
-            if guild is None:
-                logging.error("Guild not found. Check GUILD_ID.")
-                await asyncio.sleep(UPDATE_INTERVAL)
-                continue
-            member = guild.get_member(client.user.id)
-            if member is None:
-                logging.error("Bot member not found in guild.")
-                await asyncio.sleep(UPDATE_INTERVAL)
-                continue
-            await member.edit(nick=formatted_price)
-            logging.info("Nickname updated.")
-            role_name = "PriceBotSolColor"  # Name of the role you want to recolor
+            for guild_id in GUILD_IDS:
+                guild = discord.utils.get(client.guilds, id=guild_id)
+                if guild is None:
+                    logging.error(f"Guild {guild_id} not found.")
+                    continue
 
-            role = discord.utils.get(guild.roles, name=role_name)
-            if role:
-                if change_24h > 0:
-                    await role.edit(color=discord.Color.green())
-                    logging.info("Set role color to green 📈")
+                member = guild.get_member(client.user.id)
+                if member is None:
+                    logging.error(f"Bot member not found in guild {guild_id}.")
+                    continue
+
+                await member.edit(nick=formatted_price)
+                logging.info(f"Nickname updated in guild {guild.name}.")
+
+                role_name = "PriceBotSolColor"
+                role = discord.utils.get(guild.roles, name=role_name)
+                if role:
+                    color = discord.Color.green() if change_24h > 0 else discord.Color.red()
+                    await role.edit(color=color)
+                    logging.info(f"Updated role color in {guild.name}.")
                 else:
-                    await role.edit(color=discord.Color.red())
-                    logging.info("Set role color to red 📉")
-            else:
-                logging.warning(f"Role '{role_name}' not found in guild.")
+                    logging.warning(f"Role '{role_name}' not found in {guild.name}.")
 
         except Exception as e:
             logging.error(f"Error updating nickname: {e}")
